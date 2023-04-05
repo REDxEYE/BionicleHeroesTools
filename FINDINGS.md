@@ -112,7 +112,9 @@ struct TST0{
     uint32_t raw_textures_size; // Relative offsets (from &index_count) to raw texture data.
 };
 ```
+
 #### TAS0
+
 ```cpp
 
 struct AnimatedTexture{ 
@@ -137,6 +139,7 @@ struct TAS0{
 ```
 
 #### MS00
+
 ```cpp
 struct VertexFormat{
     uint32_t b0:1;
@@ -197,6 +200,7 @@ struct Ms00{
 ```
 
 #### OBJ0
+
 ```cpp
 struct OBJ0{
     uint32_t count;
@@ -216,6 +220,7 @@ struct Container{
   uint32_t unk1[2];
 };
 ```
+
 Then based on flags it's either a model or particles containers.
 
 If flag is not zero and greater than 0, and less then 2, then it's a particles.
@@ -244,13 +249,30 @@ struct Particle{
 
 };
 ```
+
 Otherwise, it's a model container
+
 ```cpp
+enum D3DPRIMITIVETYPE
+{
+  D3DPT_POINTLIST = 0x1,
+  D3DPT_LINELIST = 0x2,
+  D3DPT_LINESTRIP = 0x3,
+  D3DPT_TRIANGLELIST = 0x4,
+  D3DPT_TRIANGLESTRIP = 0x5,
+  D3DPT_TRIANGLEFAN = 0x6,
+};
+
+
 struct Strip{
     uint32_t unk;
     uint16_t indices_count;
     uint16_t indices_count_dup; // Duplicate value.
-    uint32_t unk1[15];
+    uint32_t unk1[11];
+    uint32_t index_mode; // D3DPRIMITIVETYPE
+    uint32_t unk2;
+    uint32_t min_index;
+    uint32_t vertex_count;
     uint32_t indices_offset; // Offset into indices array, not a byte offset, it's item offset.
     uint32_t polygon_count; // Polygon count including degenerate polygons.
 };
@@ -289,6 +311,7 @@ struct Models{
 ```
 
 #### VBIB
+
 ```cpp
 struct BufferBlock{
     uint32_t size;
