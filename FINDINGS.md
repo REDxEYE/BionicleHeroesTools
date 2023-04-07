@@ -87,8 +87,6 @@ struct SPEC{
     uint32_t count;
     uint32_t unk;
     Entity entities[count];
-    pad_to(16);
-
 };
 ```
 
@@ -208,24 +206,6 @@ struct OBJ0{
     Container containers[count];
 };
 
-struct Container{
-  uint32_t type;
-  uint32_t unk[3];
-  uint32_t flags;
-  // Data depends on a flag, so read text bellow first. 
-  // ...
-  // ...
-  float bbox_min[3];
-  float bbox_max[3];
-  uint32_t unk1[2];
-};
-```
-
-Then based on flags it's either a model or particles containers.
-
-If flag is not zero and greater than 0, and less then 2, then it's a particles.
-
-```cpp
 struct Particle{
     float position[3];
     float scale[2]; 
@@ -241,18 +221,15 @@ struct ParticleGroup{
     Particle particles[count];
 };
 
-struct Particle{
+struct Particles{
     uint32_t count;
     // If contaier type has second bit set, then it's a part of some vector, otherwise unsed 2 floats.
     float unk_vec[2]; // Target vector is 3d, but they only store X and Y.
     ParticleGroup groups[count];
 
 };
-```
 
-Otherwise, it's a model container
 
-```cpp
 enum D3DPRIMITIVETYPE
 {
   D3DPT_POINTLIST = 0x1,
@@ -308,6 +285,25 @@ struct Models{
     uint32_t unk[3];
     Model models[count];
 };
+
+struct Container{
+  uint32_t type;
+  uint32_t unk[3];
+  uint32_t flags;
+  // Pseudo-code explaining to to read data
+  /* if (flag){
+        if(flag>0 && flag < 2){
+            Particles particles;
+        }
+     }else{
+        Models models;
+     }
+  */
+  float bbox_min[3];
+  float bbox_max[3];
+  uint32_t unk1[2];
+};
+
 ```
 
 #### VBIB
