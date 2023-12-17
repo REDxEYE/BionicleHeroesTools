@@ -104,18 +104,10 @@ class Buffer(abc.ABC, io.RawIOBase):
         buffer = bytearray()
 
         while True:
-            chunk = self.read(min(32, self.remaining()))
-            if chunk:
-                chunk_end = chunk.find(b'\x00')
-            else:
-                chunk_end = 0
-            if chunk_end >= 0:
-                buffer += chunk[:chunk_end]
-            else:
-                buffer += chunk
-            if chunk_end >= 0:
-                self.seek(-(len(chunk) - chunk_end - 1), io.SEEK_CUR)
+            char = self.read(1)
+            if not char or char == b"\x00":
                 return buffer.decode('latin', errors='replace')
+            buffer+=char
 
     def read_fourcc(self):
         return self.read_ascii_string(4)
@@ -292,6 +284,9 @@ class MemorySliceBuffer(BufferSlice, MemoryBuffer):
     def __init__(self, buffer: Union[bytes, bytearray, memoryview], parent_offset: int):
         BufferSlice.__init__(self, parent_offset)
         MemoryBuffer.__init__(self, buffer)
+
+    def __repr__(self):
+        return f"MemorySliceBuffer(cursor={self.tell()}, size={self.size()})"
 
 
 class WritableMemoryBuffer(io.BytesIO, Buffer):

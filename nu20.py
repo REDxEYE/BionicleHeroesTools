@@ -28,6 +28,9 @@ class NU20:
             if not name:
                 break
             size = buffer.read_uint32()
+            if name == "VBIB" and size == 16:
+                size = 48
+
             chunks.append(Chunk(name, buffer.slice(size=size - 8)))
             buffer.skip(size - 8)
         return cls(chunks)

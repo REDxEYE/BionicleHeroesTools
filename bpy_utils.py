@@ -19,7 +19,7 @@ def add_material(mat_name, model_ob):
         if md.materials.get(mat.name, None):
             for i, material in enumerate(md.materials):
                 if material == mat:
-                    return i
+                    return material
         else:
             md.materials.append(mat)
             return mat

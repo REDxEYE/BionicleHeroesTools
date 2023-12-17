@@ -239,7 +239,7 @@ class Spline:
     unk2: int
     unk3: float
     unk4: float
-    points: List[Tuple[Vector3, Vector3, Vector3, float]]
+    points: List[Tuple[Vector3, Vector3, Vector3, int]]
 
     @classmethod
     def from_buffer(cls, buffer: Buffer):
@@ -253,7 +253,7 @@ class Spline:
         points = []
         for _ in range(point_count):
             points.append((Vector3.from_buffer(record.buffer), Vector3.from_buffer(record.buffer),
-                           Vector3.from_buffer(record.buffer), record.buffer.read_float()))
+                           Vector3.from_buffer(record.buffer), record.buffer.read_uint32()))
         return cls(name, InstFlags(flags), unk1, unk2, unk3, unk4, points)
 
 

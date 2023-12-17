@@ -17,11 +17,7 @@ register_, unregister_ = bpy.utils.register_classes_factory(ALL_CLASSES)
 
 
 def menu_import(self, context):
-    self.layout.operator(BH_OT_NupImport.bl_idname, text="Bionicle Model (.nup)")
-
-
-# def menu_export(self, context):
-#     self.layout.operator(FF_OT_R2Export.bl_idname, text="FF Model (.pml)")
+    self.layout.operator(BH_OT_NupImport.bl_idname, text="Bionicle Model (.nup/.hgp)")
 
 
 def register():
