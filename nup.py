@@ -593,8 +593,8 @@ class Material:
         elif self.blend_indices:
             vertex_dtype_items.append(("indices", np.float32, (3,)))
 
-        if self.position2:
-            vertex_dtype_items.append(("pos1", np.float32, (3,)))
+        # if self.position2:
+        #     vertex_dtype_items.append(("pos1", np.float32, (3,)))
 
         return np.dtype(vertex_dtype_items)
 

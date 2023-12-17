@@ -9,7 +9,7 @@ import bpy
 from mathutils import Matrix, Vector, Euler
 from .bpy_utils import add_material, get_or_create_collection
 from .common import Vector4
-from .file_utils import FileBuffer
+from .file_utils import FileBuffer, Buffer
 from .job import Job, SplineEditor
 from .material_utils import clear_nodes, create_node, Nodes, connect_nodes, create_texture_node, \
     create_animated_texture_node
@@ -116,7 +116,7 @@ def create_material(tas0: AnimatedTexturesChunk, obj, material_info: Material, m
     mat = add_material(f"material_{material_id}", obj)
     if mat.get("loaded", False):
         return mat
-    if 1:
+    if 0:
         mat["transparency"] = (material_info.flags >> 0) & 1
         mat["b01"] = (material_info.flags >> 1) & 1
         mat["b02"] = (material_info.flags >> 2) & 1
@@ -213,7 +213,7 @@ def load_obj(nup: NupModel, mesh_info: Container, name, matrix: Optional[Matrix]
             else:
                 raise NotImplementedError(f"Unsupported index mode({strip.index_mode})")
             remapped_indices = np.asarray(tri_list, np.uint32) + indices_id_offset
-            material_indices.extend(np.full(len(tri_list), materials_offset))
+            material_indices.extend(np.full(len(tri_list), entry.material_id))
             indices.extend(remapped_indices)
             indices_count += len(tri_list)
             vertex_count += entry.vertex_count
@@ -226,11 +226,18 @@ def load_obj(nup: NupModel, mesh_info: Container, name, matrix: Optional[Matrix]
 
         mesh_data = bpy.data.meshes.new(name + "_DATA")
         mesh_obj = bpy.data.objects.new(name, mesh_data)
+
+        materials = []
+        for n, material in enumerate(nup.ms00):
+            mat = create_material(AnimatedTexturesChunk(), mesh_obj, material, n, animated_texture_path)
+            materials.append(mat)
+
         for entry in mesh_info.models:
             if (nup.ms00[entry.material_id].unk_flags >> 6) & 1:
                 continue
 
-            mat = create_material(nup.tas0, mesh_obj, nup.ms00[entry.material_id], entry.material_id, animated_texture_path)
+            mat = materials[entry.material_id]
+
             mat["unk0"] = entry.unk_0
             mat["unk1"] = entry.unk_1
             mat["vertex_size"] = entry.vertex_size
@@ -494,6 +501,13 @@ def load_spline(nup: NupModel, spline: Spline,
     curve_object.parent = parent_object
 
 
+def import_nup_from_buffer(root_path: Path, nup_buffer: Buffer):
+    tas_cache = (root_path / "TAS_CACHE")
+    os.makedirs(tas_cache, exist_ok=True)
+    nup = NupModel.from_buffer(nup_buffer)
+    import_nup(nup, tas_cache)
+
+
 def import_nup_from_path(nup_path: Path):
     job_path = nup_path.with_suffix(".job")
     tas_cache = (nup_path.parent / "TAS_CACHE")
@@ -504,13 +518,18 @@ def import_nup_from_path(nup_path: Path):
         job = None
     nup = NupModel.from_buffer(FileBuffer(nup_path))
 
+    root, spline_collection = import_nup(nup, tas_cache)
+
+    job_spline_collection = get_or_create_collection("JOB_SPLINES", spline_collection)
+    load_job(job, root, job_spline_collection)
+
+
+def import_nup(nup, tas_cache):
     prepare_animated_textures(nup, tas_cache)
     load_textures(nup.tst0, tas_cache)
-
     root = bpy.data.objects.new("ROOT", None)
     root.matrix_world = Euler((math.radians(90), 0, 0), "XYZ").to_matrix().to_4x4()
     bpy.context.scene.collection.objects.link(root)
-
     spec_collection = get_or_create_collection("SPEC", bpy.context.scene.collection)
     inst_collection = get_or_create_collection("INST", bpy.context.scene.collection)
     inst_to_spec_map = {spec.instance_id: spec for spec in nup.spec}
@@ -541,10 +560,8 @@ def import_nup_from_path(nup_path: Path):
                     parent_collection = get_or_create_collection("SPEC_STATIC", spec_collection)
             matrix = Matrix(np.transpose(instance.matrix))
             load_inst(nup, instance, name, tas_cache, matrix, parent_collection, root, bbox_data)
-
     spline_collection = get_or_create_collection("SPLINES", bpy.context.scene.collection)
     sst_spline_collection = get_or_create_collection("SST0_SPLINES", spline_collection)
     for spline in nup.sst0:
         load_spline(nup, spline, root, sst_spline_collection)
-    sst_spline_collection = get_or_create_collection("JOB_SPLINES", spline_collection)
-    load_job(job, root, sst_spline_collection)
+    return root, spline_collection

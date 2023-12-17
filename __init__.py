@@ -1,4 +1,6 @@
-from .operators import OPERATOR_CLASSES, BH_OT_NupImport
+import bpy
+
+from .operators import OPERATOR_CLASSES, BH_OT_NupImport, BH_OT_PakImport
 
 bl_info = {
     "name": "Bionicle:Heroes toolkit",
@@ -9,7 +11,6 @@ bl_info = {
     "category": "Import-Export"
 }
 
-import bpy
 
 ALL_CLASSES = OPERATOR_CLASSES  # + UI_CLASSES
 
@@ -18,6 +19,7 @@ register_, unregister_ = bpy.utils.register_classes_factory(ALL_CLASSES)
 
 def menu_import(self, context):
     self.layout.operator(BH_OT_NupImport.bl_idname, text="Bionicle Model (.nup/.hgp)")
+    self.layout.operator(BH_OT_PakImport.bl_idname, text="Bionicle Pak file (.pak)")
 
 
 def register():

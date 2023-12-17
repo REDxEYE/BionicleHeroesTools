@@ -6,11 +6,18 @@ import bpy
 import numpy as np
 from mathutils import Euler, Vector, Matrix
 
-from BionicleHeroesTools.file_utils import FileBuffer
+from BionicleHeroesTools.file_utils import FileBuffer, Buffer
 from BionicleHeroesTools.load_nup import load_textures, create_material
 from BionicleHeroesTools.mesh_utils import unstripify
 from BionicleHeroesTools.nup import AnimatedTexturesChunk
 from BionicleHeroesTools.hgp import HGPModel
+
+
+def import_hgp_from_buffer(name: str, root_path: Path, hgp_buffer: Buffer):
+    tas_cache = (root_path / "TAS_CACHE")
+    os.makedirs(tas_cache, exist_ok=True)
+    hgp = HGPModel.from_buffer(hgp_buffer)
+    import_hgp(hgp, name, tas_cache)
 
 
 def import_hgp_from_path(hgp_path: Path):
@@ -20,21 +27,21 @@ def import_hgp_from_path(hgp_path: Path):
     tas_cache = (hgp_path.parent / "TAS_CACHE")
     os.makedirs(tas_cache, exist_ok=True)
 
-    load_textures(hgp.textures, tas_cache)
+    import_hgp(hgp, hgp_path.stem, tas_cache)
 
+
+def import_hgp(hgp, model_name, tas_cache):
+    load_textures(hgp.textures, tas_cache)
     root = bpy.data.objects.new("ROOT", None)
     root.matrix_world = Euler((math.radians(90), 0, 0), "XYZ").to_matrix().to_4x4()
     bpy.context.scene.collection.objects.link(root)
-    model_name = hgp_path.stem
     armature = bpy.data.armatures.new(f"{model_name}_ARM_DATA")
     armature_obj = bpy.data.objects.new(f"{model_name}_ARM", armature)
     armature_obj['MODE'] = 'SourceIO'
     armature_obj.show_in_front = True
     bpy.context.scene.collection.objects.link(armature_obj)
-
     armature_obj.select_set(True)
     bpy.context.view_layer.objects.active = armature_obj
-
     bpy.ops.object.mode_set(mode='EDIT')
     bl_bones = []
     for bone in hgp.bones:
@@ -45,21 +52,20 @@ def import_hgp_from_path(hgp_path: Path):
         if s_bone.parent != -1:
             bl_parent = bl_bones[s_bone.parent]
             bl_bone.parent = bl_parent
-
     bpy.ops.object.mode_set(mode='POSE')
     for n, se_bone in enumerate(hgp.bones):
         bl_bone = armature_obj.pose.bones.get(se_bone.name)
         mat = Matrix(se_bone.matrix1).transposed()
         bl_bone.matrix_basis.identity()
         bl_bone.matrix = bl_bone.parent.matrix @ mat if bl_bone.parent else mat
-
     bpy.ops.pose.armature_apply()
     bpy.ops.object.mode_set(mode='OBJECT')
-
     armature_obj.parent = root
     for layer in hgp.layers:
         models, bone_models = layer
         for model in models:
+            if not model.models:
+                continue
             vertex_count = 0
             indices_count = 0
             indices = []
@@ -68,7 +74,6 @@ def import_hgp_from_path(hgp_path: Path):
             material_indices = []
             materials_offset = 0
             for mesh in model.models:
-
                 if (hgp.materials[mesh.material_id].unk_flags >> 6) & 1:
                     continue
 
@@ -81,7 +86,7 @@ def import_hgp_from_path(hgp_path: Path):
                 else:
                     raise NotImplementedError(f"Unsupported index mode({strip.index_mode})")
                 remapped_indices = np.asarray(tri_list, np.uint32) + indices_id_offset
-                material_indices.extend(np.full(len(tri_list), materials_offset))
+                material_indices.extend(np.full(len(tri_list), mesh.material_id))
                 indices.extend(remapped_indices)
                 indices_count += len(tri_list)
                 vertex_count += mesh.vertex_count
@@ -94,17 +99,18 @@ def import_hgp_from_path(hgp_path: Path):
 
             mesh_data = bpy.data.meshes.new(model_name + "_DATA")
             mesh_obj = bpy.data.objects.new(model_name, mesh_data)
+            materials = []
+            for n, material in enumerate(hgp.materials):
+                mat = create_material(AnimatedTexturesChunk(), mesh_obj, material, n, tas_cache)
+                materials.append(mat)
 
             for entry in model.models:
                 if (hgp.materials[entry.material_id].unk_flags >> 6) & 1:
                     continue
 
-                mat = create_material(AnimatedTexturesChunk(), mesh_obj, hgp.materials[entry.material_id],
-                                      entry.material_id,
-                                      tas_cache)
+                mat = materials[entry.material_id]
                 mat["unk0"] = entry.unk_0
                 mat["unk1"] = entry.unk_1
-                mat["vertex_size"] = entry.vertex_size
 
                 material = hgp.materials[entry.material_id]
                 vertex_dtype = material.construct_vertex_dtype()
@@ -119,6 +125,10 @@ def import_hgp_from_path(hgp_path: Path):
                     blend_weights = entry_vertex_data["weights"].astype(np.float32) / 255
                     if "weights" not in global_vertex_data:
                         global_vertex_data["weights"] = np.zeros((vertex_count, 3), np.float32)
+
+                    last_weight = 1 - blend_weights[:, 0] - blend_weights[:, 1]
+                    blend_weights[:, 3] = last_weight
+
                     global_vertex_data["weights"][vertex_slice] = blend_weights[:, :3]
 
                 if material.blend_weight:
