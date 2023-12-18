@@ -160,5 +160,14 @@ def create_animated_texture_node(material, path: Path, frame_count: int = 0, nam
     return texture_node
 
 
+def create_node_group(material, group_name, location=None, *, name=None):
+    group_node = create_node(material, Nodes.ShaderNodeGroup, name or group_name)
+    group_node.node_tree = bpy.data.node_groups.get(group_name)
+    group_node.width = group_node.bl_width_max
+    if location is not None:
+        group_node.location = location
+    return group_node
+
+
 def connect_nodes(material, output_socket, input_socket):
     material.node_tree.links.new(output_socket, input_socket)

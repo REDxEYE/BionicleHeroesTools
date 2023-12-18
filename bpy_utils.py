@@ -28,3 +28,10 @@ def add_material(mat_name, model_ob):
         mat.diffuse_color = [random.uniform(.4, 1) for _ in range(3)] + [1.0]
         md.materials.append(mat)
         return mat
+
+
+def append_blend(filepath, type_name, link=False):
+    with bpy.data.libraries.load(filepath, link=link) as (data_from, data_to):
+        setattr(data_to, type_name, [asset for asset in getattr(data_from, type_name)])
+    for o in getattr(data_to, type_name):
+        o.use_fake_user = True

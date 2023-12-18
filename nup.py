@@ -434,6 +434,7 @@ class Material:
     color: Tuple[float, float, float]
     vertex_format: int
     unk: int
+    texture_ids: list[int]
     texture_id0: int
     texture_id1: int
     texture_id2: int
@@ -442,8 +443,8 @@ class Material:
 
     @property
     def transparency2(self):
-        return (self.unk_flags >> 21) & 1
-
+        return bool((self.unk_flags >> 21) & 1)
+    #
     # @property
     # def transparent(self):
     #     return bool(self.flags & 1)
@@ -540,20 +541,25 @@ class Material:
             flags = 0
             color = (1, 1, 1, 1)
             unk_flags = 0
+            texture_ids = []
         else:
             entry = buffer.slice(size=532)
             entry.seek(0x40)
             flags = entry.read_uint32()
+            if flags & 0xF == 0xB:
+                flags &= 0xFFFFFFF0
             unk = entry.read_uint32()
             assert sum(entry.read(12)) == 0
             color = Vector4.from_buffer(entry)
             entry.seek(0xB8)
             unk_flags = entry.read_uint32()
             texture_id1, texture_id2, texture_id3, texture_id4 = entry.read_fmt("4I")
+            entry.seek(256)
+            texture_ids = entry.read_fmt("4I")
             entry.seek(0x1B8)
             vertex_format = entry.read_uint32()
             buffer.skip(532)
-        return cls(flags, color, vertex_format, unk, texture_id1, texture_id2, texture_id3, texture_id4,
+        return cls(flags, color, vertex_format, unk, texture_ids, texture_id1, texture_id2, texture_id3, texture_id4,
                    unk_flags)
 
     def construct_vertex_dtype(self):

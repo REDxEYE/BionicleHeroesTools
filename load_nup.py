@@ -7,12 +7,12 @@ import numpy as np
 
 import bpy
 from mathutils import Matrix, Vector, Euler
-from .bpy_utils import add_material, get_or_create_collection
+from .bpy_utils import add_material, get_or_create_collection, append_blend
 from .common import Vector4
 from .file_utils import FileBuffer, Buffer
 from .job import Job, SplineEditor
 from .material_utils import clear_nodes, create_node, Nodes, connect_nodes, create_texture_node, \
-    create_animated_texture_node
+    create_animated_texture_node, create_node_group
 from .mesh_utils import unstripify
 from .nup import NupModel, Container, Texture, Material, AnimatedTexture, Instance, Spec, Spline, TST0Chunk, \
     AnimatedTexturesChunk
@@ -22,12 +22,21 @@ def build_material(tas0: AnimatedTexturesChunk, material_id: int, mat, material:
     mat.use_nodes = True
     clear_nodes(mat)
 
-    if material.texture_id1:
-        create_texture_node(mat, bpy.data.images[f"tex_{material.texture_id1 - 1:04}.dds"])
-    if material.texture_id2:
-        create_texture_node(mat, bpy.data.images[f"tex_{material.texture_id2 - 1:04}.dds"])
-    if material.texture_id3:
-        create_texture_node(mat, bpy.data.images[f"tex_{material.texture_id3 - 1:04}.dds"])
+    if "LB_SPECULAR" not in bpy.data.node_groups:
+        current_path = Path(__file__).parent
+        asset_path = current_path / 'assets' / "materials.blend"
+        append_blend(str(asset_path), "node_groups")
+
+    # if material.texture_id1:
+    #     create_texture_node(mat, bpy.data.images[f"tex_{material.texture_id1 - 1:04}.dds"])
+    # if material.texture_id2:
+    #     create_texture_node(mat, bpy.data.images[f"tex_{material.texture_id2 - 1:04}.dds"])
+    # if material.texture_id3:
+    #     create_texture_node(mat, bpy.data.images[f"tex_{material.texture_id3 - 1:04}.dds"])
+
+    # if material.unk_flags == 42:
+    #     create_texture_node(mat, bpy.data.images[f"tex_{material.texture_ids[0] - 1:04}.dds"])
+    #     create_texture_node(mat, bpy.data.images[f"tex_{material.texture_ids[1] - 1:04}.dds"])
 
     animated_texture_info: Optional[AnimatedTexture] = None
     if tas0:
@@ -44,26 +53,31 @@ def build_material(tas0: AnimatedTexturesChunk, material_id: int, mat, material:
         tex_node = None
 
     output_node = create_node(mat, Nodes.ShaderNodeOutputMaterial)
-    bsdf_node = create_node(mat, Nodes.ShaderNodeBsdfPrincipled)
-    bsdf_node.inputs["Specular"].default_value = 0
-    bsdf_node.inputs["Roughness"].default_value = 1
-    connect_nodes(mat, bsdf_node.outputs[0], output_node.inputs[0])
+    shader_node = create_node_group(mat, "LB_SPECULAR")
+    connect_nodes(mat, shader_node.outputs[0], output_node.inputs[0])
+    if tex_node:
+        connect_nodes(mat, tex_node.outputs[0], shader_node.inputs["Diffuse"])
 
-    if material.transparency2 and tex_node:
-        connect_nodes(mat, tex_node.outputs[1], bsdf_node.inputs["Alpha"])
+    if (material.transparency2 or material.transparency or material.transparent) and tex_node:
+        connect_nodes(mat, tex_node.outputs[1], shader_node.inputs["Alpha"])
         mat.blend_method = 'HASHED'
         mat.shadow_method = 'HASHED'
 
     if material.has_vcolors and tex_node:
         vertex_color = create_node(mat, Nodes.ShaderNodeVertexColor)
-        mix = create_node(mat, Nodes.ShaderNodeMixRGB)
-        mix.inputs[0].default_value = 1
-        mix.blend_type = "MULTIPLY"
-        connect_nodes(mat, vertex_color.outputs[0], mix.inputs[1])
-        connect_nodes(mat, tex_node.outputs[0], mix.inputs[2])
-        connect_nodes(mat, mix.outputs[0], bsdf_node.inputs["Base Color"])
+        connect_nodes(mat, vertex_color.outputs[0], shader_node.inputs["Tint"])
     else:
-        bsdf_node.inputs["Base Color"].default_value = material.color
+        shader_node.inputs["Tint"].default_value = material.color
+
+    if material.unk_flags == 42:
+        t_node = create_texture_node(mat, bpy.data.images[f"tex_{material.texture_ids[0] - 1:04}.dds"])
+        connect_nodes(mat, t_node.outputs[0], shader_node.inputs["Specular"])
+        t_node = create_texture_node(mat, bpy.data.images[f"tex_{material.texture_ids[1] - 1:04}.dds"])
+        t_node.image.colorspace_settings.name = 'Non-Color'
+
+        connect_nodes(mat, t_node.outputs[0], shader_node.inputs["Normal"])
+        connect_nodes(mat, t_node.outputs[1], shader_node.inputs["AO"])
+
     # if material.has_vcolors:
     #     vertex_color = create_node(mat, Nodes.ShaderNodeVertexColor)
     #     mix = create_node(mat, Nodes.ShaderNodeMixRGB)
@@ -116,7 +130,7 @@ def create_material(tas0: AnimatedTexturesChunk, obj, material_info: Material, m
     mat = add_material(f"material_{material_id}", obj)
     if mat.get("loaded", False):
         return mat
-    if 0:
+    if 1:
         mat["transparency"] = (material_info.flags >> 0) & 1
         mat["b01"] = (material_info.flags >> 1) & 1
         mat["b02"] = (material_info.flags >> 2) & 1
@@ -150,38 +164,38 @@ def create_material(tas0: AnimatedTexturesChunk, obj, material_info: Material, m
         mat["b30"] = (material_info.flags >> 30) & 1
         mat["b31"] = (material_info.flags >> 31) & 1
     if 1:
-        mat["b00"] = (material_info.unk_flags >> 0) & 1
-        mat["b01"] = (material_info.unk_flags >> 1) & 1
-        mat["b02"] = (material_info.unk_flags >> 2) & 1
-        mat["b03"] = (material_info.unk_flags >> 3) & 1
-        mat["b04"] = (material_info.unk_flags >> 4) & 1
-        mat["b05"] = (material_info.unk_flags >> 5) & 1
-        mat["b06"] = (material_info.unk_flags >> 6) & 1
-        mat["b07"] = (material_info.unk_flags >> 7) & 1
-        mat["b08"] = (material_info.unk_flags >> 8) & 1
-        mat["b09"] = (material_info.unk_flags >> 9) & 1
-        mat["b10"] = (material_info.unk_flags >> 10) & 1
-        mat["b11"] = (material_info.unk_flags >> 11) & 1
-        mat["b12"] = (material_info.unk_flags >> 12) & 1
-        mat["b13"] = (material_info.unk_flags >> 13) & 1
-        mat["b14"] = (material_info.unk_flags >> 14) & 1
-        mat["b15"] = (material_info.unk_flags >> 15) & 1
-        mat["b16"] = (material_info.unk_flags >> 16) & 1
-        mat["b17"] = (material_info.unk_flags >> 17) & 1
-        mat["b18"] = (material_info.unk_flags >> 18) & 1
-        mat["b19"] = (material_info.unk_flags >> 19) & 1
-        mat["b20"] = (material_info.unk_flags >> 20) & 1
-        mat["transparency2_b21"] = material_info.transparency2
-        mat["b22"] = (material_info.unk_flags >> 22) & 1
-        mat["b23"] = (material_info.unk_flags >> 23) & 1
-        mat["b24"] = (material_info.unk_flags >> 24) & 1
-        mat["b25"] = (material_info.unk_flags >> 25) & 1
-        mat["b26"] = (material_info.unk_flags >> 26) & 1
-        mat["b27"] = (material_info.unk_flags >> 27) & 1
-        mat["b28"] = (material_info.unk_flags >> 28) & 1
-        mat["b29"] = (material_info.unk_flags >> 29) & 1
-        mat["b30"] = (material_info.unk_flags >> 30) & 1
-        mat["b31"] = (material_info.unk_flags >> 31) & 1
+        mat["unk_b00"] = (material_info.unk_flags >> 0) & 1
+        mat["unk_b01"] = (material_info.unk_flags >> 1) & 1
+        mat["unk_b02"] = (material_info.unk_flags >> 2) & 1
+        mat["unk_b03"] = (material_info.unk_flags >> 3) & 1
+        mat["unk_b04"] = (material_info.unk_flags >> 4) & 1
+        mat["unk_b05"] = (material_info.unk_flags >> 5) & 1
+        mat["unk_b06"] = (material_info.unk_flags >> 6) & 1
+        mat["unk_b07"] = (material_info.unk_flags >> 7) & 1
+        mat["unk_b08"] = (material_info.unk_flags >> 8) & 1
+        mat["unk_b09"] = (material_info.unk_flags >> 9) & 1
+        mat["unk_b10"] = (material_info.unk_flags >> 10) & 1
+        mat["unk_b11"] = (material_info.unk_flags >> 11) & 1
+        mat["unk_b12"] = (material_info.unk_flags >> 12) & 1
+        mat["unk_b13"] = (material_info.unk_flags >> 13) & 1
+        mat["unk_b14"] = (material_info.unk_flags >> 14) & 1
+        mat["unk_b15"] = (material_info.unk_flags >> 15) & 1
+        mat["unk_b16"] = (material_info.unk_flags >> 16) & 1
+        mat["unk_b17"] = (material_info.unk_flags >> 17) & 1
+        mat["unk_b18"] = (material_info.unk_flags >> 18) & 1
+        mat["unk_b19"] = (material_info.unk_flags >> 19) & 1
+        mat["unk_b20"] = (material_info.unk_flags >> 20) & 1
+        mat["unk_transparency2_b21"] = material_info.transparency2
+        mat["unk_b22"] = (material_info.unk_flags >> 22) & 1
+        mat["unk_b23"] = (material_info.unk_flags >> 23) & 1
+        mat["unk_b24"] = (material_info.unk_flags >> 24) & 1
+        mat["unk_b25"] = (material_info.unk_flags >> 25) & 1
+        mat["unk_b26"] = (material_info.unk_flags >> 26) & 1
+        mat["unk_b27"] = (material_info.unk_flags >> 27) & 1
+        mat["unk_b28"] = (material_info.unk_flags >> 28) & 1
+        mat["unk_b29"] = (material_info.unk_flags >> 29) & 1
+        mat["unk_b30"] = (material_info.unk_flags >> 30) & 1
+        mat["unk_b31"] = (material_info.unk_flags >> 31) & 1
     build_material(tas0, material_id, mat, material_info, animated_texture_path)
     mat["loaded"] = True
     return mat
