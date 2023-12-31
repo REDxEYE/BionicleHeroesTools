@@ -61,6 +61,14 @@ def import_hgp(hgp, model_name, tas_cache):
     bpy.ops.pose.armature_apply()
     bpy.ops.object.mode_set(mode='OBJECT')
     armature_obj.parent = root
+
+    for attachment in hgp.attachments:
+        attachment_obj = bpy.data.objects.new(attachment.name, None)
+        attachment_obj.parent = armature_obj
+        attachment_obj.parent_type = 'BONE'
+        attachment_obj.parent_bone = hgp.bones[attachment.unk0].name
+        attachment_obj.matrix_local = Matrix(attachment.matrix).transposed()
+        bpy.context.scene.collection.objects.link(attachment_obj)
     for layer in hgp.layers:
         models, bone_models = layer
         for model in models:

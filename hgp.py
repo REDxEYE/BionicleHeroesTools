@@ -98,12 +98,30 @@ class Layer:
 
 
 @dataclass
+class Attachment:
+    name: str
+    matrix: tuple[tuple[float, ...], ...]
+    unk0: int
+    unk1: int
+    unk2: int
+
+    @classmethod
+    def from_buffer(cls, buffer: Buffer):
+        matrix = buffer.read_fmt("4f"), buffer.read_fmt("4f"), buffer.read_fmt("4f"), buffer.read_fmt("4f")
+        name_offset, unk0, unk1, unk2 = buffer.read_fmt("4I")
+        with buffer.read_from_offset(name_offset):
+            name = buffer.read_ascii_string()
+        return cls(name, matrix, unk0, unk1, unk2)
+
+
+@dataclass
 class HGPModel:
     materials: list[Material]
     textures: list[Texture]
     vertex_buffers: list[DataBuffer]
     index_buffers: list[DataBuffer]
     bones: list[Bone]
+    attachments: list[Attachment]
     layers: list[tuple[list[Container], list[list[Optional[Container]]]]]
 
     @classmethod
@@ -114,7 +132,7 @@ class HGPModel:
         (version, chunks_offset, materials_count,
          materials_offset, bone_count, bone_offset,
          matrices_offset, matrices2_offset, unk2, unk3, name_table,
-         unk4, unk5, unk6, unk7, unk8,
+         unk4, unk5, unk6, attachment_count, attachment_offset,
          layer_count, layer_offset) = buffer.read_fmt("18I")
         materials = []
         with buffer.read_from_offset(materials_offset):
@@ -141,8 +159,12 @@ class HGPModel:
             for i in range(bone_count):
                 bones[i].matrix2 = buffer.read_fmt("4f"), buffer.read_fmt("4f"), buffer.read_fmt("4f"), buffer.read_fmt(
                     "4f")
+        attachments = []
+        with buffer.read_from_offset(attachment_offset):
+            for _ in range(attachment_count):
+                attachments.append(Attachment.from_buffer(buffer))
         layers = []
         with buffer.read_from_offset(layer_offset):
             for _ in range(layer_count):
                 layers.append(Layer.from_buffer(buffer, bone_count))
-        return cls(materials, tst, vbib.vertex_buffers, vbib.index_buffers, bones, layers)
+        return cls(materials, tst, vbib.vertex_buffers, vbib.index_buffers, bones, attachments, layers)
